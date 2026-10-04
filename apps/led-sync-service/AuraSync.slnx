@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LedSync.Api/LedSync.Api.csproj" />
+    <Project Path="src/LedSync.Application/LedSync.Application.csproj" />
+    <Project Path="src/LedSync.Domain/LedSync.Domain.csproj" />
+    <Project Path="src/LedSync.Infrastructure/LedSync.Infrastructure.csproj" />
+  </Folder>
+  <Project Path="../../tests/service/LedSync.Application.Tests/LedSync.Application.Tests.csproj" />
+</Solution>
