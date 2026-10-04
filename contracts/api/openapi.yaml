@@ -1,0 +1,369 @@
+openapi: 3.1.0
+info:
+  title: AuraSync local service API
+  version: 1.0.0
+  description: Local configuration and runtime control API. RGB frames use a WebSocket.
+servers:
+  - url: http://127.0.0.1:5078/api/v1
+paths:
+  /health:
+    get:
+      summary: Check local service health
+      responses:
+        "200":
+          description: Service is responsive
+  /profiles:
+    get:
+      summary: List profiles
+      responses:
+        "200":
+          description: Profiles
+    post:
+      summary: Create a profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileRequest"
+      responses:
+        "201":
+          description: Profile created
+        "400":
+          description: Invalid profile request
+  /profiles/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProfileId"
+    put:
+      summary: Update a profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+        "409":
+          description: Stop synchronization before changing active LED output settings
+        "404":
+          description: Profile not found
+    delete:
+      summary: Delete a profile
+      responses:
+        "204":
+          description: Profile deleted
+        "409":
+          description: Stop synchronization before deleting the active profile
+        "404":
+          description: Profile not found
+  /profiles/{id}/activate:
+    parameters:
+      - $ref: "#/components/parameters/ProfileId"
+    post:
+      summary: Activate a profile and apply its runtime configuration
+      responses:
+        "200":
+          description: Current runtime status after applying the profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+        "409":
+          description: Stop synchronization before changing active LED output settings
+        "404":
+          description: Profile not found
+  /displays:
+    get:
+      summary: Enumerate connected displays
+      responses:
+        "200":
+          description: Detected displays
+        "501":
+          description: Display enumeration is unsupported on the current platform
+  /audio/devices:
+    get:
+      summary: Enumerate active Windows audio output devices
+      responses:
+        "200":
+          description: Detected render endpoints available for WASAPI loopback capture
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AudioDevice"
+        "501":
+          description: Audio output enumeration is unsupported on this platform
+  /serial/ports:
+    get:
+      summary: Enumerate connected Windows serial ports
+      responses:
+        "200":
+          description: Available COM port names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        "501":
+          description: Serial-port enumeration is unsupported on the current platform
+  /sync/status:
+    get:
+      summary: Get current synchronization state
+      responses:
+        "200":
+          description: Current state, capture mode, frame rate, selected display, and active LED device settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+  /sync/source:
+    put:
+      summary: Select the screen source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayId:
+                  type: [string, "null"]
+      responses:
+        "200":
+          description: Source selection applied
+        "400":
+          description: Display is not currently available
+        "501":
+          description: Display enumeration is unsupported
+  /sync/config:
+    put:
+      summary: Update runtime configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncConfiguration"
+      responses:
+        "200":
+          description: Runtime configuration applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+        "400":
+          description: Invalid configuration
+        "409":
+          description: Capture or output settings cannot be changed while synchronization is running
+  /sync/start:
+    post:
+      summary: Open the selected serial controller and start screen or audio synchronization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncConfiguration"
+      responses:
+        "202":
+          description: Serial output is ready for screen frames or audio-reactive frames
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+        "409":
+          description: Display, capture mode, or controller settings are not ready
+        "501":
+          description: Serial output is unsupported on this platform
+  /sync/stop:
+    post:
+      summary: Stop synchronization
+      responses:
+        "200":
+          description: Synchronization stopped
+  /sync/frames:
+    get:
+      summary: Upgrade to WebSocket and send RGB screen frames
+      description: |
+        Send one binary message per frame while synchronization is running.
+        Each message must contain exactly three bytes per configured LED in
+        RGB order. Edge order starts at the upper-left, proceeds clockwise,
+        and applies the configured side count to both sides.
+      responses:
+        "101":
+          description: WebSocket connection upgraded
+        "403":
+          description: Origin is not an AuraSync desktop client
+        "400":
+          description: A WebSocket upgrade is required
+components:
+  parameters:
+    ProfileId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    SyncStatus:
+      type: object
+      required: [isRunning, state, framesPerSecond, captureMode, ledDevice]
+      properties:
+        isRunning:
+          type: boolean
+        state:
+          type: string
+        activeProfileId:
+          type: [string, "null"]
+        selectedDisplayId:
+          type: [string, "null"]
+        framesPerSecond:
+          type: integer
+        message:
+          type: [string, "null"]
+        captureMode:
+          type: string
+          enum: [screen, audio, custom]
+        ledDevice:
+          $ref: "#/components/schemas/LedDeviceSettings"
+    AudioDevice:
+      type: object
+      required: [id, name, direction]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        direction:
+          type: string
+          enum: [output]
+    ProfileRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        settings:
+          $ref: "#/components/schemas/ProfileSettings"
+    ProfileSettings:
+      type: object
+      required: [captureMode, soundMode]
+      properties:
+        displayId:
+          type: [string, "null"]
+        captureMode:
+          type: string
+          enum: [screen, audio, custom]
+        audioDeviceId:
+          type: [string, "null"]
+        soundMode:
+          type: string
+          enum: [off, average]
+        audioColors:
+          type: array
+          minItems: 2
+          maxItems: 8
+          items:
+            type: string
+            pattern: "^#[0-9A-Fa-f]{6}$"
+        customEffect:
+          type: string
+          enum: [static, blink, fade, rainbow, fire, color-cycle, color-wipe, theater-chase, breathing]
+          default: static
+        customColors:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            pattern: "^#[0-9A-Fa-f]{6}$"
+        customSpeed:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        ledDevice:
+          $ref: "#/components/schemas/LedDeviceSettings"
+    SyncConfiguration:
+      allOf:
+        - $ref: "#/components/schemas/ProfileSettings"
+        - type: object
+          required: [framesPerSecond]
+          properties:
+            framesPerSecond:
+              type: integer
+              minimum: 1
+              maximum: 240
+    LedDeviceSettings:
+      type: object
+      required: [controllerType, baudRate, ledCount, topLeds, sideLeds, bottomLeds]
+      properties:
+        controllerType:
+          type: string
+          enum: [adalight, ardulight]
+        serialPort:
+          type: [string, "null"]
+          pattern: "^COM[1-9][0-9]*$"
+        baudRate:
+          type: integer
+          enum: [9600, 57600, 115200, 128000, 153600, 230400, 256000, 460800, 500000, 921600, 1000000, 1500000, 2000000]
+        ledCount:
+          type: integer
+          minimum: 1
+          maximum: 255
+          description: The bundled Adalight and Ardulight Arduino loops support up to 255 LEDs.
+        topLeds:
+          type: integer
+          minimum: 0
+        sideLeds:
+          type: integer
+          minimum: 0
+          description: Shared count applied to each of the left and right sides.
+        bottomLeds:
+          type: integer
+          minimum: 0
+        topMarginPercent:
+          type: number
+          minimum: 0
+          maximum: 40
+          default: 0
+        sideMarginPercent:
+          type: number
+          minimum: 0
+          maximum: 40
+          default: 0
+        bottomMarginPercent:
+          type: number
+          minimum: 0
+          maximum: 40
+          default: 0
+        cardSizePercent:
+          type: number
+          minimum: 1
+          maximum: 50
+          default: 15
+          description: Edge-zone thickness as a percentage of the display dimension.
+        bottomGapPercent:
+          type: number
+          minimum: 0
+          maximum: 60
+          default: 0
+          description: Center gap along the bottom edge for a monitor stand.
+        numberingOffset:
+          type: integer
+          minimum: -999
+          maximum: 999
+          default: 0
+        skipCorners:
+          type: boolean
+          default: false
+        invertOrder:
+          type: boolean
+          default: false

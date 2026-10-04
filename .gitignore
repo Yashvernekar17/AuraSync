@@ -1,0 +1,39 @@
+node_modules/
+dist/
+release/
+.angular/
+coverage/
+.npm/
+.vs/
+
+# .NET build and test output
+[Bb]in/
+[Oo]bj/
+TestResults/
+*.user
+*.suo
+*.rsuser
+*.sln.docstates
+*.userosscache
+
+# Angular and TypeScript build output
+*.tsbuildinfo
+
+# Electron package output
+*.asar
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.tmp

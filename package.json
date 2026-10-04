@@ -1,0 +1,23 @@
+{
+  "name": "aurasync",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/desktop/angular",
+    "apps/desktop/electron"
+  ],
+  "scripts": {
+    "dev:ui": "npm run start --workspace @aurasync/angular",
+    "dev:desktop": "concurrently -k \"npm run dev:ui\" \"wait-on http://127.0.0.1:4200 && npm run start --workspace @aurasync/electron\"",
+    "build:ui": "npm run build --workspace @aurasync/angular && node scripts/copy-third-party-licenses.cjs",
+    "build:service": "dotnet publish apps/led-sync-service/src/LedSync.Api/LedSync.Api.csproj -c Release -r win-x64 --self-contained true -o apps/desktop/electron/release/service",
+    "package:win": "npm run build:ui && npm run build:service && npm run package:win --workspace @aurasync/electron"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "wait-on": "^8.0.4"
+  },
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0"
+  }
+}

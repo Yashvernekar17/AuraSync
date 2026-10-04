@@ -1,0 +1,427 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" (click)="navigate('dashboard')" aria-label="AuraSync dashboard">
+      <span class="brand-mark"><i></i><i></i><i></i></span>
+      <span>Aura<span class="brand-light">Sync</span><small>AMBIENT CONTROL</small></span>
+    </a>
+    <div class="nav-label">WORKSPACE</div>
+    <nav aria-label="Main navigation">
+      <button *ngFor="let item of sections" class="nav-item" [class.active]="section === item.id"
+        (click)="navigate(item.id)">
+        <span class="nav-icon">{{ item.icon }}</span>{{ item.label }}
+        <span *ngIf="item.id === 'screen' && displays.length" class="nav-dot"></span>
+      </button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="service-card">
+        <span class="service-pulse" [class.online]="status"></span>
+        <div><strong>Local service</strong><small>{{ status ? 'Connected · v1' : 'Connecting…' }}</small></div>
+      </div>
+      <div class="sidebar-version">DESKTOP PREVIEW <span>0.1.0</span></div>
+    </div>
+  </aside>
+
+  <main class="main-area">
+    <div class="toast-container" aria-live="polite" aria-atomic="false">
+      <div *ngIf="error" class="alert error-alert toast" role="alert">
+        <span>!</span><div><strong>Action couldn’t be completed</strong><p>{{ error }}</p></div>
+        <button (click)="error = ''" aria-label="Dismiss error">×</button>
+      </div>
+      <div *ngIf="notice" class="alert success-alert toast" role="status">
+        <span>✓</span><div>{{ notice }}</div>
+        <button (click)="notice = ''" aria-label="Dismiss notice">×</button>
+      </div>
+    </div>
+    <header class="topbar">
+      <div class="breadcrumb">AURASYNC <span>/</span> {{ section | uppercase }}</div>
+      <div class="topbar-right">
+        <span class="run-state" [class.running]="status?.isRunning">
+          <i></i>{{ status?.isRunning ? 'SYNC ACTIVE' : 'STANDING BY' }}
+        </span>
+        <button class="avatar" title="AuraSync desktop client">AS</button>
+      </div>
+    </header>
+
+    <div class="content" [class.wide-content]="section === 'profiles'">
+      <video #captureVideo *ngIf="previewStream as stream" class="capture-source-video"
+        [srcObject]="stream" autoplay muted playsinline aria-hidden="true"></video>
+      <div *ngIf="startupLoading" class="startup-loading" role="status"><span class="loading-spinner"></span>Loading saved profile and displays…</div>
+
+      <ng-container [ngSwitch]="section">
+        <section *ngSwitchCase="'dashboard'">
+          <div class="page-heading">
+            <div><div class="eyebrow">YOUR AMBIENT SETUP</div><h1>Dashboard</h1>
+              <p>Control your lighting, sources, and live synchronization.</p></div>
+            <button class="button button-primary" (click)="toggleSync()" [disabled]="syncActionLoading || startupLoading">
+              <span *ngIf="syncActionLoading" class="loading-spinner" aria-hidden="true"></span>
+              <span *ngIf="!syncActionLoading">{{ status?.isRunning ? 'Ⅱ' : '▶' }}</span>
+              {{ syncActionLoading ? (status?.isRunning ? 'Stopping…' : 'Starting…') : (status?.isRunning ? 'Stop sync' : 'Start sync') }}
+            </button>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric-card"><div class="metric-icon violet">◷</div><div class="metric-label">ACTIVE PROFILE</div>
+              <div class="metric-value">{{ activeProfile?.name || 'No profile' }}</div>
+              <div class="metric-foot">{{ profiles.length }} saved profile{{ profiles.length === 1 ? '' : 's' }}</div></article>
+            <article class="metric-card"><div class="metric-icon cyan">▣</div><div class="metric-label">DISPLAY SOURCE</div>
+              <div class="metric-value metric-small">{{ selectedDisplay?.name || 'Not selected' }}</div>
+              <div class="metric-foot">{{ displaySummary }}</div></article>
+            <article class="metric-card"><div class="metric-icon amber">↗</div><div class="metric-label">FRAME RATE</div>
+              <div class="metric-value">{{ status?.isRunning ? effectiveOutputFrameRate : framesPerSecond }} <small>FPS</small></div>
+              <div class="metric-foot">{{ status?.isRunning && effectiveOutputFrameRate < status.framesPerSecond ? 'Limited by serial bandwidth' : 'Target synchronization rate' }}</div></article>
+            <article class="metric-card"><div class="metric-icon green">✳</div><div class="metric-label">ENGINE STATUS</div>
+              <div class="metric-value metric-small">{{ status?.isRunning ? 'Running' : 'Stopped' }}</div>
+              <div class="metric-foot">{{ status?.message || 'Service is ready' }}</div></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel preview-panel">
+              <div class="panel-heading"><div><div class="eyebrow">CAPTURE SOURCE</div><h2>Display preview</h2></div>
+                <button class="text-button" (click)="navigate('screen')">Configure <span>↗</span></button></div>
+              <div class="preview-stage">
+                <div class="screen-frame">
+                  <div class="screen-top"><span class="screen-led"></span><span>{{ selectedDisplay?.name || 'No display selected' }}</span><span class="screen-resolution">{{ selectedDisplay?.width || '—' }} × {{ selectedDisplay?.height || '—' }}</span></div>
+                  <div class="screen-content">
+                    <video *ngIf="previewStream as stream" class="preview-video" [srcObject]="stream" autoplay muted playsinline></video>
+                    <canvas #dashboardLedCanvas class="led-card-canvas dashboard-led-canvas"
+                      [attr.aria-label]="previewLedDevice.ledCount + ' LED cards showing live sampled colors'"
+                      [class.led-layout-inactive]="!status?.isRunning"></canvas>
+                    <div *ngIf="!previewStream" class="screen-placeholder">
+                      <div class="screen-orbit orbit-one"></div><div class="screen-orbit orbit-two"></div>
+                      <div class="screen-center"><span class="brand-mark"><i></i><i></i><i></i></span><strong>{{ previewLoading ? 'STARTING PREVIEW' : 'LIVE PREVIEW' }}</strong><small>{{ previewMessage }}</small></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="preview-footer"><span><i class="status-dot"></i>{{ status?.state || 'Checking service' }}</span>
+                <span>{{ selectedDisplayId || 'Choose a display to begin' }}</span></div>
+            </article>
+
+            <article class="panel quick-panel">
+              <div class="panel-heading"><div><div class="eyebrow">QUICK ACCESS</div><h2>Current profile</h2></div><button class="icon-button" (click)="navigate('profiles')" title="Manage profiles">···</button></div>
+              <div *ngIf="activeProfile; else emptyProfile" class="active-profile">
+                <div class="profile-art"><span class="brand-mark"><i></i><i></i><i></i></span><span class="profile-art-label">ACTIVE PROFILE</span></div>
+                <h3>{{ activeProfile.name }}</h3><p>Personalized lighting configuration</p>
+                <div class="profile-settings"><span>Capture <b>{{ activeProfile.settings.captureMode }}</b></span><span>LEDs <b>{{ activeProfile.settings.ledDevice.ledCount }}</b></span></div>
+                <button class="button button-outline full-button" (click)="navigate('profiles')">Manage profile <span>→</span></button>
+              </div>
+              <ng-template #emptyProfile><div class="empty-state">No profiles yet. Create one to save your settings.<button class="button button-outline" (click)="navigate('profiles')">Create profile</button></div></ng-template>
+            </article>
+          </div>
+
+          <div class="section-title"><div><div class="eyebrow">SYSTEM</div><h2>Connection overview</h2></div><button class="text-button" (click)="reload()">Refresh <span>↻</span></button></div>
+          <div class="connection-row"><div class="connection-icon">⇄</div><div class="connection-copy"><strong>LED sync service</strong><small>Local API · 127.0.0.1:5078</small></div>          <span class="connection-status" [class.offline]="!status"><i></i> {{ status ? 'Connected' : 'Unavailable' }}</span></div>
+        </section>
+
+        <section *ngSwitchCase="'profiles'">
+          <div class="page-heading"><div><div class="eyebrow">PERSONALIZE YOUR LIGHTING</div><h1>Profiles</h1><p>Save and switch between your synchronization setups.</p></div></div>
+          <div class="profiles-layout">
+            <article class="panel profile-list-panel"><div class="panel-heading"><div><div class="eyebrow">LIBRARY</div><h2>Your profiles <span class="count-pill">{{ profiles.length }}</span></h2></div><span *ngIf="profilesLoading" class="loading-spinner" aria-label="Loading profiles"></span></div>
+              <div *ngIf="profiles.length; else noProfiles" class="profile-list">
+                <div *ngFor="let profile of profiles" class="profile-row" [class.selected]="selectedProfileId === profile.id">
+                  <button class="profile-select" (click)="selectProfile(profile)"><span class="profile-swatch"></span><span><strong>{{ profile.name }}</strong><small>{{ profile.settings.captureMode }} · {{ profile.settings.ledDevice.ledCount }} LEDs</small></span></button>
+                  <span *ngIf="profile.isActive" class="active-pill">ACTIVE</span>
+                  <button *ngIf="!profile.isActive" class="mini-button" (click)="activateProfile(profile)" [disabled]="!!profileActionId"><span *ngIf="profileActionId === profile.id && profileActionType === 'activate'" class="loading-spinner" aria-hidden="true"></span>{{ profileActionId === profile.id && profileActionType === 'activate' ? 'Activating…' : 'Activate' }}</button>
+                  <button class="delete-button" (click)="deleteProfile(profile)" [disabled]="!!profileActionId" [attr.aria-label]="'Delete ' + profile.name"><span *ngIf="profileActionId === profile.id && profileActionType === 'delete'" class="loading-spinner" aria-hidden="true"></span><span *ngIf="profileActionId !== profile.id || profileActionType !== 'delete'">×</span></button>
+                </div>
+              </div>
+              <ng-template #noProfiles><div class="empty-state">{{ profilesLoading ? 'Loading saved profiles…' : 'Profiles keep your display and LED settings together.' }}</div></ng-template>
+              <div class="create-profile"><label>Create a profile</label><button class="button button-primary" type="button" (click)="beginCreateProfile()" [disabled]="profileSaving"><span class="loading-spinner" *ngIf="profileSaving" aria-hidden="true"></span>{{ profileSaving ? 'Creating…' : isCreatingProfile ? 'New profile form open' : 'Create new profile' }}</button></div>
+            </article>
+            <article class="panel profile-layout-panel">
+              <div class="led-section-heading led-count-heading"><div><div class="eyebrow">LED LAYOUT</div><h3>Screen edge zones</h3></div>
+                <span class="led-total-pill">{{ ledDevice.ledCount }} LEDs</span></div>
+              <div class="led-layout-preview profile-display-preview" [style.aspect-ratio]="selectedDisplayAspectRatio"
+                role="img" [attr.aria-label]="ledDevice.ledCount + ' LED cards positioned over ' + (selectedDisplay?.name || 'the selected display')">
+                <video *ngIf="previewStream as stream" class="profile-display-video"
+                  [srcObject]="stream" autoplay muted playsinline aria-hidden="true"></video>
+                <div *ngIf="!previewStream" class="profile-display-placeholder">
+                  <span>{{ selectedDisplay?.name || 'No display selected' }}</span>
+                  <small>{{ previewLoading ? 'Opening live preview…' : previewMessage }}</small>
+                </div>
+                <div class="profile-display-caption">
+                  <strong>{{ selectedDisplay?.name || 'Selected display' }}</strong>
+                  <span>{{ selectedDisplay?.width || '—' }} × {{ selectedDisplay?.height || '—' }}</span>
+                </div>
+                <canvas #profileLedCanvas class="led-card-canvas profile-led-canvas"
+                  [class.led-layout-inactive]="!status?.isRunning"></canvas>
+                <span *ngFor="let card of ledCardPlacements" class="led-card led-card-positioned"
+                  [style.left.%]="card.left" [style.top.%]="card.top"
+                  [style.width.%]="card.width" [style.height.%]="card.height"
+                  [title]="'LED ' + ledCardNumber(card.index)">{{ ledCardNumber(card.index) }}</span>
+              </div>
+              <div class="led-layout-editor">
+                <div class="led-layout-main">
+                  <label class="field-label" for="profile-led-count">Total LEDs <span>Max {{ maxLedCount }}</span></label>
+                  <input id="profile-led-count" class="field-input" type="number" min="1" [max]="maxLedCount" [(ngModel)]="ledDevice.ledCount" (ngModelChange)="updateLayoutFromTotal()">
+                  <div class="led-edge-counts">
+                    <label class="field-label" for="profile-top-leds">Top LEDs</label><input id="profile-top-leds" class="field-input" type="number" min="0" [max]="ledDevice.ledCount" [(ngModel)]="ledDevice.topLeds" (ngModelChange)="updateTotalFromLayout()">
+                    <label class="field-label" for="profile-side-leds">LEDs on each side</label><input id="profile-side-leds" class="field-input" type="number" min="0" [max]="maxLedCount / 2" [(ngModel)]="ledDevice.sideLeds" (ngModelChange)="updateTotalFromLayout()">
+                    <label class="field-label" for="profile-bottom-leds">Bottom LEDs</label><input id="profile-bottom-leds" class="field-input" type="number" min="0" [max]="ledDevice.ledCount" [(ngModel)]="ledDevice.bottomLeds" (ngModelChange)="updateTotalFromLayout()">
+                  </div>
+                </div>
+                <div class="led-layout-controls">
+                  <div class="layout-control-field"><label class="field-label" for="profile-top-margin">Top margin <span>%</span></label><input id="profile-top-margin" class="field-input" type="number" min="0" max="40" step="0.5" [(ngModel)]="ledDevice.topMarginPercent"></div>
+                  <div class="layout-control-field"><label class="field-label" for="profile-side-margin">Side margin <span>%</span></label><input id="profile-side-margin" class="field-input" type="number" min="0" max="40" step="0.5" [(ngModel)]="ledDevice.sideMarginPercent"></div>
+                  <div class="layout-control-field"><label class="field-label" for="profile-bottom-margin">Bottom margin <span>%</span></label><input id="profile-bottom-margin" class="field-input" type="number" min="0" max="40" step="0.5" [(ngModel)]="ledDevice.bottomMarginPercent"></div>
+                  <div class="layout-control-field"><label class="field-label" for="profile-card-size">Card size / thickness <span>%</span></label><input id="profile-card-size" class="field-input" type="number" min="1" max="50" step="1" [(ngModel)]="ledDevice.cardSizePercent"></div>
+                  <div class="layout-control-field"><label class="field-label" for="profile-bottom-gap">Bottom gap / stand <span>%</span></label><input id="profile-bottom-gap" class="field-input" type="number" min="0" max="60" step="1" [(ngModel)]="ledDevice.bottomGapPercent"></div>
+                  <div class="layout-control-field"><label class="field-label" for="profile-numbering-offset">LED start offset</label><input id="profile-numbering-offset" class="field-input" type="number" min="-999" max="999" [(ngModel)]="ledDevice.numberingOffset"></div>
+                  <label class="layout-checkbox"><input type="checkbox" [(ngModel)]="ledDevice.skipCorners"> Skip corners</label>
+                  <label class="layout-checkbox"><input type="checkbox" [(ngModel)]="ledDevice.invertOrder"> Invert LED order</label>
+                </div>
+              </div>
+              <p class="editor-note">Top, side, and bottom margins position the screen area; card size sets edge-zone thickness. Cards are arranged in one line and may overlap. Side count applies to both sides.</p>
+            </article>
+            <article class="panel editor-panel"><div class="panel-heading"><div><div class="eyebrow">PROFILE SETTINGS</div><h2>{{ selectedProfileId ? 'Edit profile' : 'New profile' }}</h2></div></div>
+              <label class="field-label" for="profile-name">Profile name</label><input id="profile-name" class="field-input" [(ngModel)]="profileName" maxlength="60" placeholder="Profile name">
+              <label class="field-label" for="profile-display">Display source</label><select id="profile-display" class="field-input" [ngModel]="selectedDisplayId" (ngModelChange)="selectProfileDisplay($event)"><option value="">Select a display</option><option *ngFor="let display of displays" [value]="display.id">{{ display.name }} · {{ display.width }}×{{ display.height }}</option></select>
+              <label class="field-label" for="profile-mode">Lighting mode</label><select id="profile-mode" class="field-input" [ngModel]="captureMode" (ngModelChange)="changeCaptureMode($event)"><option value="screen">Screen capture</option><option value="audio">Sound reactive</option><option value="custom">Custom RGB effects</option></select>
+              <div *ngIf="captureMode === 'custom'" class="audio-profile-settings">
+                <div class="setting-row audio-response-summary"><div><strong>Custom RGB effect</strong><small>Works without screen or audio capture.</small></div></div>
+                <label class="field-label" for="custom-effect">Effect</label>
+                <select id="custom-effect" class="field-input" [(ngModel)]="customEffect">
+                  <option *ngFor="let effect of customEffects" [value]="effect.value">{{ effect.label }}</option>
+                </select>
+                <div class="audio-palette">
+                  <div class="audio-palette-heading"><strong>Effect colors</strong><small>{{ customEffect === 'fire' ? 'Flame heat blends from the first color at the base to the last color at the hottest tips.' : 'Pick one to eight colors or start from a popular RGB palette.' }}</small></div>
+                  <div class="audio-theme-list">
+                    <button *ngFor="let theme of audioThemes" type="button" class="audio-theme-button"
+                      (click)="setCustomTheme(theme.colors)">
+                      <span>{{ theme.name }}</span><i *ngFor="let color of theme.colors" [style.background]="color"></i>
+                    </button>
+                  </div>
+                  <div class="audio-color-list">
+                    <label *ngFor="let color of customColors; let i = index" class="audio-color-field">
+                      <span>Color {{ i + 1 }}</span><input type="color" [(ngModel)]="customColors[i]">
+                      <button *ngIf="customColors.length > 1" type="button" (click)="removeCustomColor(i)" [attr.aria-label]="'Remove color ' + (i + 1)">×</button>
+                    </label>
+                  </div>
+                  <button *ngIf="customColors.length < 8" type="button" class="text-button audio-add-color" (click)="addCustomColor()">+ Add color</button>
+                </div>
+                <div class="custom-speed-control">
+                  <label class="field-label" for="custom-speed">Animation speed <span>{{ customSpeed }}%</span></label>
+                  <input id="custom-speed" class="range-input" type="range" min="1" max="100" [(ngModel)]="customSpeed">
+                </div>
+              </div>
+              <div *ngIf="captureMode === 'audio'" class="audio-profile-settings">
+                <div class="field-label serial-port-label"><label for="profile-audio-device">Audio output device</label><button class="text-button" type="button" (click)="loadAudioDevices(true)" [disabled]="audioDevicesLoading"><span *ngIf="audioDevicesLoading" class="loading-spinner" aria-hidden="true"></span>{{ audioDevicesLoading ? 'Detecting…' : 'Refresh ↻' }}</button></div>
+                <select id="profile-audio-device" class="field-input" [(ngModel)]="selectedAudioDeviceId">
+                  <option [ngValue]="null">Choose an output device</option>
+                  <option *ngFor="let device of audioDevices" [ngValue]="device.id">{{ device.name }}</option>
+                  <option *ngIf="savedAudioDeviceMissing" [ngValue]="selectedAudioDeviceId">Saved device · reconnect or choose another</option>
+                </select>
+                <small class="port-hint">{{ audioDevicesUnavailable ? 'Audio output discovery is unavailable.' : audioDevices.length ? audioDevices.length + ' output device' + (audioDevices.length === 1 ? '' : 's') + ' detected' : audioDevicesLoading ? 'Detecting audio outputs…' : 'No active audio output detected.' }}</small>
+                <div class="setting-row audio-response-summary"><div><strong>Sound response</strong><small>Average level</small></div></div>
+                <div class="audio-palette">
+                  <div class="audio-palette-heading"><strong>RGB color theme</strong><small>Audio intensity blends through these colors.</small></div>
+                  <div class="audio-theme-list">
+                    <button *ngFor="let theme of audioThemes" type="button" class="audio-theme-button"
+                      [class.selected]="isAudioThemeSelected(theme.colors)" (click)="setAudioTheme(theme.colors)">
+                      <span>{{ theme.name }}</span><i *ngFor="let color of theme.colors" [style.background]="color"></i>
+                    </button>
+                  </div>
+                  <div class="audio-color-list">
+                    <label *ngFor="let color of audioColors; let i = index" class="audio-color-field">
+                      <span>Color {{ i + 1 }}</span><input type="color" [(ngModel)]="audioColors[i]">
+                      <button *ngIf="audioColors.length > 2" type="button" (click)="removeAudioColor(i)" [attr.aria-label]="'Remove color ' + (i + 1)">×</button>
+                    </label>
+                  </div>
+                  <button *ngIf="audioColors.length < 8" type="button" class="text-button audio-add-color" (click)="addAudioColor()">+ Add color</button>
+                </div>
+              </div>
+              <div class="led-device-settings">
+                <div class="led-section-heading"><div><div class="eyebrow">ARDUINO LED CONTROLLER</div><h3>Device connection</h3></div></div>
+                <label class="field-label" for="led-controller">Controller protocol</label>
+                <select id="led-controller" class="field-input" [ngModel]="ledDevice.controllerType" (ngModelChange)="changeControllerType($event)">
+                  <option value="adalight">Adalight · up to 255 LEDs (Arduino compatible)</option>
+                  <option value="ardulight">Ardulight · up to 255 LEDs</option>
+                </select>
+                <div class="field-label serial-port-label"><label for="led-com-port">Serial / COM port</label><button class="text-button" type="button" (click)="loadSerialPorts()" [disabled]="serialPortsLoading"><span *ngIf="serialPortsLoading" class="loading-spinner" aria-hidden="true"></span>{{ serialPortsLoading ? 'Detecting…' : 'Refresh ports ↻' }}</button></div>
+                <select id="led-com-port" class="field-input" [(ngModel)]="ledDevice.serialPort">
+                  <option [ngValue]="null">Choose a COM port</option>
+                  <option *ngFor="let port of serialPorts" [ngValue]="port">{{ port }}</option>
+                  <option *ngIf="ledDevice.serialPort && !serialPorts.includes(ledDevice.serialPort)" [ngValue]="ledDevice.serialPort">{{ ledDevice.serialPort }} · not currently detected</option>
+                </select>
+                <small class="port-hint">{{ serialPortsUnavailable ? 'Port detection is unavailable. Enter the COM port manually.' : serialPorts.length ? serialPorts.length + ' serial port' + (serialPorts.length === 1 ? '' : 's') + ' detected' : 'No serial ports detected. You can still enter the port manually.' }}</small>
+                <label class="field-label" for="led-com-manual">Or enter a COM port</label>
+                <input id="led-com-manual" class="field-input" [(ngModel)]="ledDevice.serialPort" placeholder="COM3" pattern="COM[1-9][0-9]*">
+                <label class="field-label" for="led-baud-rate">Baud rate</label>
+                <select id="led-baud-rate" class="field-input" [(ngModel)]="ledDevice.baudRate">
+                  <option *ngFor="let baud of baudRates" [ngValue]="baud">{{ baud | number }} baud</option>
+                </select>
+
+                <p class="editor-note">Set the count to match NUM_LEDS in the Arduino sketch. Output rate is automatically limited to keep serial frames fresh; increase baud in both the Arduino sketch and profile for a higher rate.</p>
+              </div>
+              <button *ngIf="selectedProfileId" class="button button-primary full-button" type="button" (click)="saveProfile()" [disabled]="profileSaving"><span *ngIf="profileSaving" class="loading-spinner" aria-hidden="true"></span>{{ profileSaving ? 'Saving…' : 'Save changes' }}</button>
+              <div *ngIf="!selectedProfileId" class="profile-form-actions">
+                <button class="button button-primary full-button" type="button" (click)="createProfile()" [disabled]="profileSaving"><span *ngIf="profileSaving" class="loading-spinner" aria-hidden="true"></span>{{ profileSaving ? 'Creating…' : 'Create profile' }}</button>
+                <button *ngIf="isCreatingProfile" class="button button-outline full-button" type="button" (click)="cancelCreateProfile()" [disabled]="profileSaving">Cancel</button>
+              </div>
+              <p class="editor-note">Settings are saved locally and applied to the service when the profile is active.</p>
+            </article>
+          </div>
+        </section>
+
+        <section *ngSwitchCase="'screen'">
+          <div class="page-heading"><div><div class="eyebrow">CAPTURE CONFIGURATION</div><h1>Screen source</h1><p>Select a connected display and preview its live desktop image.</p></div></div>
+          <article class="panel live-preview-panel">
+            <div class="panel-heading"><div><div class="eyebrow">LIVE SCREEN PREVIEW</div><h2>{{ selectedDisplay?.name || 'Select a display' }}</h2><small *ngIf="selectedDisplay" class="selected-display-id">{{ selectedDisplay.id }} · {{ selectedDisplay.width }} × {{ selectedDisplay.height }}</small></div>
+              <button class="text-button" (click)="retryPreview()" [disabled]="previewLoading || !selectedDisplayId">Retry preview <span>↻</span></button></div>
+            <div class="live-preview-stage">
+              <video *ngIf="previewStream as stream" class="preview-video" [srcObject]="stream" autoplay muted playsinline></video>
+              <div *ngIf="!previewStream" class="screen-placeholder">
+                <div class="screen-orbit orbit-one"></div><div class="screen-orbit orbit-two"></div>
+                <div class="screen-center"><span class="brand-mark"><i></i><i></i><i></i></span><strong>{{ previewLoading ? 'STARTING PREVIEW' : 'LIVE PREVIEW' }}</strong><small>{{ previewMessage }}</small></div>
+              </div>
+            </div>
+            <div class="preview-footer"><span><i class="status-dot" [class.preview-active]="previewStream"></i>{{ previewStream ? 'Preview active' : previewLoading ? 'Connecting' : 'Preview unavailable' }}</span>
+              <span>{{ selectedDisplayId || 'Choose a display below' }}</span></div>
+          </article>
+          <article class="panel source-panel"><div class="panel-heading"><div><div class="eyebrow">AVAILABLE DISPLAYS</div><h2>Choose a display</h2></div><button class="text-button" (click)="loadDisplays()" [disabled]="displaysLoading"><span *ngIf="displaysLoading" class="loading-spinner" aria-hidden="true"></span>{{ displaysLoading ? 'Detecting…' : 'Detect displays ↻' }}</button></div>
+            <div *ngIf="displays.length; else noDisplays" class="display-grid">
+              <button *ngFor="let display of displays" class="display-card" [class.chosen]="selectedDisplayId === display.id" [attr.aria-pressed]="selectedDisplayId === display.id" [disabled]="displayChangeLoading" (click)="changeDisplay(display.id)">
+                <span class="display-preview"><span class="display-glow"></span><span class="display-id">{{ display.id }}</span></span>
+                <span class="display-details"><strong>{{ display.name }}</strong><small>{{ display.id }}</small><small>{{ display.width }} × {{ display.height }} · {{ display.x }}, {{ display.y }}</small><small *ngIf="selectedDisplayId === display.id" class="selected-display-label">{{ displayChangeLoading ? 'APPLYING DISPLAY…' : 'CURRENT PREVIEW SOURCE' }}</small></span>
+                <span *ngIf="display.isPrimary" class="primary-pill">PRIMARY</span><span *ngIf="displayChangeLoading && selectedDisplayId === display.id; else radioMark" class="loading-spinner" aria-label="Applying display"></span><ng-template #radioMark><span class="radio-mark"></span></ng-template>
+              </button>
+            </div>
+            <ng-template #noDisplays><div class="empty-state display-empty"><span class="empty-display-icon">▣</span><strong>{{ displaysLoading ? 'Detecting displays…' : displaysUnavailable ? 'Display detection unavailable' : 'No displays detected' }}</strong><p>{{ displaysLoading ? 'Display information will appear as soon as the capture adapter responds.' : displaysUnavailable ? 'The service could not enumerate displays on this platform.' : 'Connect a display and refresh to detect it.' }}</p><button *ngIf="!displaysLoading" class="button button-outline" (click)="loadDisplays()">Try again</button></div></ng-template>
+          </article>
+          <div class="info-callout"><span>i</span><p><strong>Preview and synchronization</strong><br>When synchronization is running, AuraSync samples the selected display edges and streams Adalight or Ardulight RGB frames to the configured serial controller.</p></div>
+        </section>
+
+        <section *ngSwitchCase="'sound'">
+          <div class="page-heading"><div><div class="eyebrow">AUDIO-REACTIVE LIGHTING</div><h1>Sound to RGB</h1><p>Configure how sound analysis drives your LED colors.</p></div></div>
+          <article class="panel settings-panel">
+            <div class="setting-row"><div><strong>Audio analysis</strong><small>Analyze sound playing through a selected output.</small></div><select class="field-input compact" [ngModel]="captureMode" (ngModelChange)="changeCaptureMode($event)"><option value="screen">Screen capture</option><option value="audio">Sound reactive</option></select></div>
+            <div *ngIf="captureMode === 'audio'" class="audio-settings">
+              <div class="field-label serial-port-label"><label for="sound-audio-device">Audio output device</label><button class="text-button" type="button" (click)="loadAudioDevices(true)" [disabled]="audioDevicesLoading"><span *ngIf="audioDevicesLoading" class="loading-spinner" aria-hidden="true"></span>{{ audioDevicesLoading ? 'Detecting…' : 'Refresh ↻' }}</button></div>
+              <select id="sound-audio-device" class="field-input" [(ngModel)]="selectedAudioDeviceId">
+                <option [ngValue]="null">Choose an output device</option>
+                <option *ngFor="let device of audioDevices" [ngValue]="device.id">{{ device.name }}</option>
+                <option *ngIf="savedAudioDeviceMissing" [ngValue]="selectedAudioDeviceId">Saved device · reconnect or choose another</option>
+              </select>
+              <small class="port-hint">{{ audioDevicesUnavailable ? 'Audio output discovery is unavailable.' : audioDevices.length ? audioDevices.length + ' output device' + (audioDevices.length === 1 ? '' : 's') + ' detected' : audioDevicesLoading ? 'Detecting audio outputs…' : 'No active audio output detected.' }}</small>
+              <div class="setting-row audio-response-summary"><div><strong>Sound response</strong><small>Average level · all LEDs respond to overall loudness</small></div></div>
+              <div class="audio-palette">
+                <div class="audio-palette-heading"><strong>RGB color theme</strong><small>Audio intensity blends through these colors.</small></div>
+                <div class="audio-theme-list">
+                  <button *ngFor="let theme of audioThemes" type="button" class="audio-theme-button"
+                    [class.selected]="isAudioThemeSelected(theme.colors)" (click)="setAudioTheme(theme.colors)">
+                    <span>{{ theme.name }}</span><i *ngFor="let color of theme.colors" [style.background]="color"></i>
+                  </button>
+                </div>
+                <div class="audio-color-list">
+                  <label *ngFor="let color of audioColors; let i = index" class="audio-color-field">
+                    <span>Color {{ i + 1 }}</span><input type="color" [(ngModel)]="audioColors[i]">
+                    <button *ngIf="audioColors.length > 2" type="button" (click)="removeAudioColor(i)" [attr.aria-label]="'Remove color ' + (i + 1)">×</button>
+                  </label>
+                </div>
+                <button *ngIf="audioColors.length < 8" type="button" class="text-button audio-add-color" (click)="addAudioColor()">+ Add color</button>
+              </div>
+            </div>
+            <div *ngIf="captureMode !== 'audio'" class="info-callout"><span>i</span><p>Sound reactive mode requires an output device. Custom RGB effects and colors are configured in the profile editor.</p></div>
+            <button class="button button-primary" (click)="saveRuntimeSettings()" [disabled]="runtimeSettingsSaving"><span *ngIf="runtimeSettingsSaving" class="loading-spinner" aria-hidden="true"></span>{{ runtimeSettingsSaving ? 'Saving…' : 'Save sound settings' }}</button>
+          </article>
+        </section>
+
+        <section *ngSwitchCase="'leds'">
+          <div class="page-heading"><div><div class="eyebrow">DEVICE CONFIGURATION</div><h1>LED output</h1><p>Configure the output pipeline for your connected lighting device.</p></div></div>
+          <article class="panel settings-panel led-output-panel">
+            <div class="output-placeholder"><div class="metric-icon green">✳</div><h2>Arduino LED output</h2><p>{{ status?.isRunning ? 'Streaming ' + ledDevice.ledCount + ' LEDs to ' + ledDevice.serialPort + ' at ' + ledDevice.baudRate + ' baud.' : 'Configure the controller in a profile, then start synchronization to open its serial port.' }}</p><span class="capability-pill" [class.connected]="status?.isRunning">{{ status?.isRunning ? 'SERIAL OUTPUT CONNECTED' : 'SERIAL OUTPUT STOPPED' }}</span><small *ngIf="status?.message as statusMessage">{{ statusMessage }}</small></div>
+            <div class="led-output-settings">
+              <div class="panel-heading led-output-heading"><div><div class="eyebrow">COLOR PROCESSING</div><h2>LED color controls</h2></div><button class="text-button" type="button" (click)="resetLedOutputSettings()">Reset defaults</button></div>
+              <p class="editor-note">These color-processing settings are saved on this device and applied to the live RGB stream. Pure black samples always stay off.</p>
+              <div class="led-output-control-grid">
+                <div class="output-control">
+                  <label class="field-label" for="led-gamma">Gamma <span>{{ ledOutputSettings.gamma | number:'1.2-2' }}</span></label>
+                  <input id="led-gamma" class="field-input" type="number" min="0.05" max="10" step="0.05" [(ngModel)]="ledOutputSettings.gamma" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Device gamma curve. Default: 2.0.</small>
+                </div>
+                <div class="output-control">
+                  <label class="field-label" for="led-brightness">Brightness <span>{{ ledOutputSettings.brightness }}%</span></label>
+                  <input id="led-brightness" class="range-input" type="range" min="0" max="100" [(ngModel)]="ledOutputSettings.brightness" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Overall output level.</small>
+                </div>
+                <div class="output-control">
+                  <label class="field-label" for="led-brightness-cap">Brightness cap <span>{{ ledOutputSettings.brightnessCap }}%</span></label>
+                  <input id="led-brightness-cap" class="range-input" type="range" min="1" max="100" [(ngModel)]="ledOutputSettings.brightnessCap" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Limits combined RGB output per LED.</small>
+                </div>
+                <div class="output-control">
+                  <label class="field-label" for="led-over-brighten">Over-brightening <span>{{ ledOutputSettings.overBrighten }}%</span></label>
+                  <input id="led-over-brighten" class="range-input" type="range" min="0" max="100" [(ngModel)]="ledOutputSettings.overBrighten" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Pushes lit colors toward full brightness; black remains off.</small>
+                </div>
+                <div class="output-control">
+                  <label class="field-label" for="led-smoothing">Smoothing <span>{{ ledOutputSettings.smoothing }}</span></label>
+                  <input id="led-smoothing" class="range-input" type="range" min="0" max="255" [(ngModel)]="ledOutputSettings.smoothing" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Reduces flicker; higher values respond more slowly. 0 disables smoothing.</small>
+                </div>
+                <div class="output-control">
+                  <label class="field-label" for="led-black-threshold">Black cutoff <span>{{ ledOutputSettings.blackLevelThreshold }}</span></label>
+                  <input id="led-black-threshold" class="range-input" type="range" min="0" max="32" [(ngModel)]="ledOutputSettings.blackLevelThreshold" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Values at or below this level become fully black. 0 keeps only exact black off.</small>
+                </div>
+              </div>
+              <div class="led-output-toggles">
+                <label class="layout-checkbox"><input type="checkbox" [(ngModel)]="ledOutputSettings.averageColors" (ngModelChange)="saveLedOutputSettings()"> Average color across lit LEDs</label>
+                <label class="layout-checkbox"><input type="checkbox" [(ngModel)]="ledOutputSettings.colorTemperatureEnabled" (ngModelChange)="saveLedOutputSettings()"> Apply color temperature</label>
+                <div class="output-control temperature-control">
+                  <label class="field-label" for="led-color-temperature">Color temperature <span>{{ ledOutputSettings.colorTemperature }} K</span></label>
+                  <input id="led-color-temperature" class="range-input" type="range" min="1000" max="10000" step="100" [disabled]="!ledOutputSettings.colorTemperatureEnabled" [(ngModel)]="ledOutputSettings.colorTemperature" (ngModelChange)="saveLedOutputSettings()">
+                  <small>Warm at lower values, cool at higher values.</small>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section *ngSwitchCase="'settings'">
+          <div class="page-heading"><div><div class="eyebrow">APPLICATION</div><h1>Settings</h1><p>Service and runtime configuration.</p></div></div>
+          <article class="panel settings-panel">
+            <div class="setting-row"><div><strong>Target frame rate</strong><small>Maximum sync update frequency.</small></div><div class="fps-control"><input type="number" min="1" max="240" class="field-input compact" [(ngModel)]="framesPerSecond"><span>FPS</span></div></div>
+            <div class="setting-row"><div><strong>Lighting mode</strong><small>Choose the active sync input.</small></div><select class="field-input compact" [ngModel]="captureMode" (ngModelChange)="changeCaptureMode($event)"><option value="screen">Screen</option><option value="audio">Audio</option><option value="custom">Custom RGB</option></select></div>
+            <div *ngIf="captureMode === 'audio'" class="audio-settings">
+              <label class="field-label" for="settings-audio-device">Audio output device</label>
+              <select id="settings-audio-device" class="field-input" [(ngModel)]="selectedAudioDeviceId">
+                <option [ngValue]="null">Choose an output device</option>
+                <option *ngFor="let device of audioDevices" [ngValue]="device.id">{{ device.name }}</option>
+                <option *ngIf="savedAudioDeviceMissing" [ngValue]="selectedAudioDeviceId">Saved device · reconnect or choose another</option>
+              </select>
+            </div>
+            <button class="button button-primary" (click)="saveRuntimeSettings()" [disabled]="runtimeSettingsSaving"><span *ngIf="runtimeSettingsSaving" class="loading-spinner" aria-hidden="true"></span>{{ runtimeSettingsSaving ? 'Applying…' : 'Apply settings' }}</button>
+          </article>
+        </section>
+
+        <section *ngSwitchCase="'legal'">
+          <div class="page-heading">
+            <div><div class="eyebrow">ABOUT AURASYNC</div><h1>Legal notice</h1>
+              <p>Publisher information, third-party notices, and important use terms.</p></div>
+          </div>
+          <article class="panel settings-panel">
+            <h2>Publisher</h2>
+            <p><strong>AuraSync</strong> is the publisher label used by this repository's Windows installer. The repository does not identify a separate legal entity, address, or jurisdiction.</p>
+            <p>The repository's Git history lists Yash Vernekar as a commit author; it does not establish that person's legal or publisher status.</p>
+
+            <h2>Software and third-party licenses</h2>
+            <p>This application includes or uses third-party software subject to its own licenses and terms. Key components include Angular 22.2.1 (MIT), RxJS 7.8.2 (Apache-2.0), Electron 44.5.1 (MIT), Chromium (see its bundled notices), the .NET 10 runtime, NAudio 2.2.1 (MIT), and System.IO.Ports 10.0.0 (MIT). The user-guide firmware example requires a separately installed FastLED library (MIT); it is not bundled with this app.</p>
+            <p>See <code>THIRD-PARTY-NOTICES.md</code> and the license files in the application's <code>resources</code> directory for applicable notices and license texts. The self-contained .NET runtime is accompanied by Microsoft's software license terms, which include distribution conditions; a copy of those terms alone does not establish that distribution requirements are satisfied. This notice does not grant a license to AuraSync's project-authored code. No project-wide license is identified in the repository.</p>
+
+            <h2>External services</h2>
+            <p>The splash screen may request Orbitron from Google Fonts when online. Orbitron is identified as SIL Open Font License 1.1 software; the font is not bundled here. The request is handled by Google and may be subject to Google's applicable terms and privacy practices.</p>
+
+            <h2>Use, warranties, and liability</h2>
+            <p>You are responsible for how you use this software and for reviewing applicable laws, regulations, licenses, and service terms before using or redistributing it.</p>
+            <p>To the maximum extent permitted by applicable law, the software is provided "as is" without warranties. To the maximum extent permitted by applicable law, AuraSync does not accept responsibility for damages, losses, or other consequences arising from use or misuse. Nothing in this notice excludes or limits any right or liability that cannot lawfully be excluded or limited.</p>
+          </article>
+        </section>
+      </ng-container>
+      <footer class="page-footer">
+        <span>AURASYNC <b>·</b> LOCAL DESKTOP CONTROL</span>
+        <button class="text-button" (click)="navigate('legal')">Legal notice and licenses <span>↗</span></button>
+      </footer>
+    </div>
+  </main>
+</div>

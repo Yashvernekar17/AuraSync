@@ -1,0 +1,15 @@
+{
+  "name": "@aurasync/electron",
+  "version": "0.1.0",
+  "private": true,
+  "productName": "AuraSync",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "package:win": "electron-packager . AuraSync --platform=win32 --arch=x64 --icon=../../../aurasync-icon.ico --out=release/dist --overwrite --asar --extra-resource=../angular/dist/angular/browser --extra-resource=release/service --extra-resource=../../../THIRD-PARTY-NOTICES.md"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "@electron/packager": "^20.3.0"
+  }
+}
