@@ -1,5 +1,5 @@
 <h1 align="left">
-  <img src="./aurasync-icon.ico" alt="AuraSync icon" width="48" height="48" style="vertical-align:middle" />
+  <img src="./docs/images/aurasync-icon.png" alt="AuraSync icon" width="48" height="48" style="vertical-align:middle" />
   <span style="vertical-align:middle">AuraSync</span>
 </h1>
 
