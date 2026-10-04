@@ -1,6 +1,6 @@
 <h1 align="left">
-  <img src="./docs/images/aurasync-icon.png" alt="AuraSync icon" width="48" height="48" style="vertical-align:middle" />
-  <span style="vertical-align:middle">AuraSync</span>
+  <img src="./docs/images/aurasync-icon.png" alt="AuraSync icon" width="48" height="48" align="middle" />
+  AuraSync
 </h1>
 
 AuraSync is a Windows desktop app that synchronizes addressable LEDs with a display. It combines an Angular interface, an Electron desktop host, and a local .NET 10 service.
